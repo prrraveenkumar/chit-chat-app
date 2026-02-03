@@ -1,0 +1,71 @@
+import { getServerSession } from "next-auth";
+import { authOptions } from "../auth/[...nextauth]/options";
+import UserModel from "@/models/User";
+import dbConnect from "@/lib/dbConnect";
+import { User } from 'next-auth'
+import mongoose from "mongoose";
+
+
+export async function GET(request: Request) {
+    await dbConnect()
+
+    const session = await getServerSession(authOptions)
+
+    const user: User = session?.user as User
+
+    if (!session || !session.user) {
+        return Response.json(
+            {
+                success: false,
+                message: "User is not authenticated"
+            }, {
+            status: 401
+        })
+    }
+
+    const userId = new mongoose.Types.ObjectId(user._id)
+
+
+    try {
+
+        const userMessages = await UserModel.aggregate([
+            { $match: { id: userId } },
+            { $unwind: '$messages' },
+            { $sort: { 'messages.createdAt': -1 } },
+            { $group: { _id: '$id', message: { $push: '$message ' } } }
+        ])
+
+        if (!userMessages || userMessages?.length === 0) {
+            return Response.json(
+                {
+                    success: false,
+                    message: "User messages is not found"
+                },
+                {
+                    status: 401
+                 }
+            )
+        }
+
+        return Response.json(
+            {
+                success: true,
+                message: userMessages[0].MessageSchema
+            }, {
+            status: 401
+        })
+    
+
+    } catch (error) {
+        console.log("Problem in fetching User Message")
+        return Response.json(
+            {
+                success: false,
+                message: "Problem in fetching User Message"
+            }, {
+            status: 500
+        })
+
+    }
+
+}
